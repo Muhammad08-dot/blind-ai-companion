@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: blind_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-blind_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-blind_secret_88}
+      POSTGRES_DB: ${POSTGRES_DB:-blind_ai_db}
+    ports:
+      - "5434:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: blind_redis
+    restart: always
+    ports:
+      - "6381:6379"
+
+  qdrant:
+    image: qdrant/qdrant:v1.8.0
+    container_name: blind_qdrant
+    restart: always
+    ports:
+      - "6336:6333"
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: blind_backend
+    restart: always
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8002:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-blind_user}:${POSTGRES_PASSWORD:-blind_secret_88}@postgres:5432/${POSTGRES_DB:-blind_ai_db}
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+    depends_on:
+      - postgres
+      - redis
+      - qdrant
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    container_name: blind_frontend
+    restart: always
+    ports:
+      - "3002:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8002/api/v1
+    depends_on:
+      - backend
